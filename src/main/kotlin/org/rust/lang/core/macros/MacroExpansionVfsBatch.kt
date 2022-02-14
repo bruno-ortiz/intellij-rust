@@ -18,6 +18,7 @@ interface MacroExpansionVfsBatch {
 
     fun resolve(file: VirtualFile): Path
 
+    fun createFile(content: ByteArray, path: String): Path
     fun createFileWithContent(content: ByteArray, stepNumber: Int): Path
     fun deleteFile(file: VirtualFile)
     fun writeFile(file: VirtualFile, content: ByteArray): Path
@@ -32,8 +33,17 @@ class MacroExpansionVfsBatchImpl(rootDirName: String) : MacroExpansionVfsBatch {
     override fun resolve(file: VirtualFile): MacroExpansionVfsBatch.Path =
         PathImpl.VFile(file)
 
+    override fun createFile(content: ByteArray, path: String): MacroExpansionVfsBatch.Path =
+        createFileInternal(content, path)
+
     override fun createFileWithContent(content: ByteArray, stepNumber: Int): MacroExpansionVfsBatch.Path =
         PathImpl.StringPath(createFileInternal(content, stepNumber))
+
+    private fun createFileInternal(content: ByteArray, path: String): MacroExpansionVfsBatch.Path {
+        val fullPath = "$contentRoot/$path"
+        batch.createFile(fullPath, content)
+        return PathImpl.StringPath(fullPath)
+    }
 
     private fun createFileInternal(content: ByteArray, stepNumber: Int): String {
         val name = randomLowercaseAlphabetic(16)
@@ -78,6 +88,12 @@ class VfsBatch {
         MacroExpansionFileSystem.getInstance().createFileWithContent(child, content, mkdirs = true)
         pathsToMarkDirty += parent
         return child
+    }
+
+    fun createFile(path: String, content: ByteArray) {
+        MacroExpansionFileSystem.getInstance().createFileWithContent(path, content, mkdirs = true)
+        val parent = path.substring(0, path.lastIndexOf('/'))
+        pathsToMarkDirty += parent
     }
 
     fun writeFile(file: VirtualFile, content: String) {

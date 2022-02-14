@@ -52,7 +52,7 @@ class ExpandedMacroStorage(val project: Project) {
     private val sourceFiles: TIntObjectHashMap<SourceFile> = TIntObjectHashMap()
     private val expandedFileToInfo: TIntObjectHashMap<ExpandedMacroInfoImpl> = TIntObjectHashMap()
     private val stepped: Array<MutableList<SourceFile>?> = arrayOfNulls(DEFAULT_RECURSION_LIMIT)
-    private val _modificationTracker: SimpleModificationTracker = SimpleModificationTracker()
+    val _modificationTracker: SimpleModificationTracker = SimpleModificationTracker()
 
     val isEmpty: Boolean get() = sourceFiles.isEmpty
     val modificationTracker: ModificationTracker get() = _modificationTracker
@@ -970,7 +970,7 @@ private val MACRO_MIX_HASH_ATTRIBUTE = FileAttribute(
     /*fixedSize = */ true
 )
 
-private fun VirtualFile.writeRangeMap(ranges: RangeMap) {
+fun VirtualFile.writeRangeMap(ranges: RangeMap) {
     checkWriteAccessAllowed()
 
     RANGE_MAP_ATTRIBUTE.writeAttribute(this).use {

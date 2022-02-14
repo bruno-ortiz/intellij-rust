@@ -20,6 +20,7 @@ import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.util.containers.ContainerUtil
 import com.intellij.util.io.storage.HeavyProcessLatch
 import org.rust.RsTask
+import org.rust.lang.core.crate.CratePersistentId
 import org.rust.lang.core.macros.errors.ExpansionPipelineError
 import org.rust.lang.core.macros.errors.ProcMacroExpansionError
 import org.rust.lang.core.macros.errors.canCacheError
@@ -29,7 +30,6 @@ import org.rust.lang.core.psi.ext.*
 import org.rust.lang.core.resolve.DEFAULT_RECURSION_LIMIT
 import org.rust.lang.core.resolve.ref.RsMacroPathReferenceImpl
 import org.rust.lang.core.resolve.ref.RsResolveCache
-import org.rust.lang.core.resolve2.RESOLVE_LOG
 import org.rust.lang.core.resolve2.isNewResolveEnabled
 import org.rust.lang.core.resolve2.updateDefMapForAllCrates
 import org.rust.openapiext.*
@@ -42,6 +42,9 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.max
 import kotlin.streams.toList
 import kotlin.system.measureNanoTime
+
+// todo store in ServiceImplInner ?
+val lastUpdatedMacrosAt: MutableMap<CratePersistentId, Long> = hashMapOf()
 
 abstract class MacroExpansionTaskBase(
     project: Project,
@@ -78,15 +81,60 @@ abstract class MacroExpansionTaskBase(
         realTaskIndicator = indicator
         subTaskIndicator = indicator.toThreadSafeProgressIndicator()
 
-        try {
+        val allDefMaps = try {
             realTaskIndicator.text = "Preparing resolve data"
             updateDefMapForAllCrates(project, pool, subTaskIndicator)
         } catch (e: ProcessCanceledException) {
             throw e
-        } catch (e: Exception) {
-            // Exceptions in new resolve should not break macro expansion
-            RESOLVE_LOG.error(e)
         }
+
+        val defMaps = allDefMaps.filter {
+            lastUpdatedMacrosAt[it.crate] != it.timestamp
+        }
+        if (defMaps.isEmpty()) return
+
+        // todo parallel ?
+        // todo мб нужен readAction для batch ?
+        val batch = vfsBatchFactory()
+        // todo indexableDirectory
+        val directoryWithCrates = macroExpansionManager.indexableDirectory ?: return
+        val filesToWriteRangeAttribute = mutableListOf<Pair<MacroExpansionVfsBatch.Path, RangeMap>>()
+        for (defMap in defMaps) {
+            val directoryWithMacros = directoryWithCrates.findChild(defMap.crate.toString())
+            val existingFiles = directoryWithMacros?.children.orEmpty().associateBy { it.name }
+            val requiredExpansions = defMap.expansionNameToMacroCall
+            val filesToDelete = existingFiles.keys - requiredExpansions.keys
+            val filesToCreate = requiredExpansions.keys - existingFiles.keys
+            for (fileName in filesToCreate) {
+                val mixHashString = extractMixHashFromFileName(fileName)
+                val mixHash = HashCode.fromHexString(mixHashString)
+                val expansion = MacroExpansionSharedCache.getInstance().getExpansionIfCached(mixHash)?.ok() ?: continue
+
+                val expansionBytes = expansion.text.toByteArray()
+                val ranges = expansion.ranges
+                val path = batch.createFile(expansionBytes, "${defMap.crate}/$fileName")
+                filesToWriteRangeAttribute += path to ranges
+            }
+            for (fileName in filesToDelete) {
+                val file = existingFiles.getValue(fileName)
+                batch.deleteFile(file)
+            }
+        }
+
+        // todo async & indicator
+        batch.applyToVfs(false) {
+            for ((path, ranges) in filesToWriteRangeAttribute) {
+                val virtualFile = path.toVirtualFile() ?: continue
+                virtualFile.writeRangeMap(ranges)
+            }
+        }
+
+        for (defMap in defMaps) {
+            lastUpdatedMacrosAt[defMap.crate] = defMap.timestamp
+        }
+        storage._modificationTracker.incModificationCount()
+
+        return
 
         expansionSteps = getMacrosToExpand(dumbService).iterator()
 
@@ -133,6 +181,14 @@ abstract class MacroExpansionTaskBase(
             }
             MacroExpansionSharedCache.getInstance().flush()
         }
+    }
+
+    // "<mixHash>_<order>.rs" → "<mixHash>"
+    private fun extractMixHashFromFileName(fileName: String): String {
+        testAssert { fileName.endsWith(".rs") && fileName.contains('_') }
+        val index = fileName.indexOf('_')
+        if (index == -1) return fileName
+        return fileName.substring(0, index)
     }
 
     private fun calcProgress(step: Int, progress: Double): Double =
