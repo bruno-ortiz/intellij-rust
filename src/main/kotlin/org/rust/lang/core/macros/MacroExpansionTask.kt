@@ -126,6 +126,7 @@ abstract class MacroExpansionTaskBase(
             for ((path, ranges) in filesToWriteRangeAttribute) {
                 val virtualFile = path.toVirtualFile() ?: continue
                 virtualFile.writeRangeMap(ranges)
+                // TODO writeMixHash
             }
         }
 

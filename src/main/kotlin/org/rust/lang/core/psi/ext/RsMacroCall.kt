@@ -43,7 +43,7 @@ abstract class RsMacroCallImplMixin : RsStubbedElementImpl<RsMacroCallStub>,
 
     override fun incModificationCount(element: PsiElement): Boolean {
         modificationTracker.incModificationCount()
-        return true
+        return true // TODO false inside functions
 //        val isStructureModification = ancestors.any { it is RsMacroCall && it.macroName == "include" }
 //        return !isStructureModification // Note: RsMacroCall is a special case for RsPsiManagerImpl
     }
