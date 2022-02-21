@@ -790,12 +790,13 @@ private class MacroExpansionServiceImplInner(
         }
 
         override fun writeActionFinished(action: Any) {
-            when (shouldProcessChangedMacrosOnWriteActionFinish) {
+            val old = shouldProcessChangedMacrosOnWriteActionFinish
+            shouldProcessChangedMacrosOnWriteActionFinish = ChangedMacrosScope.NONE
+            when (old) {
                 ChangedMacrosScope.NONE -> Unit
                 ChangedMacrosScope.WORKSPACE -> processChangedMacros(true)
                 ChangedMacrosScope.ALL -> processChangedMacros(false)
             }
-            shouldProcessChangedMacrosOnWriteActionFinish = ChangedMacrosScope.NONE
         }
 
         private fun scheduleChangedMacrosUpdate(workspaceOnly: Boolean) {
