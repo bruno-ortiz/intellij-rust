@@ -571,6 +571,7 @@ private class MacroExpansionServiceImplInner(
     }
 
     private fun checkStorageConsistency() {
+        return
         performConsistencyCheckBeforeTask = false
         submitTask(object : Task.Backgroundable(project, "Cleaning outdated macros", false) {
             override fun run(indicator: ProgressIndicator) {
