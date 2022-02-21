@@ -122,6 +122,7 @@ abstract class MacroExpansionTaskBase(
         }
 
         // todo async & indicator
+        // TODO don't call applyToVfs if nothing changed
         batch.applyToVfs(false) {
             for ((path, ranges) in filesToWriteRangeAttribute) {
                 val virtualFile = path.toVirtualFile() ?: continue
