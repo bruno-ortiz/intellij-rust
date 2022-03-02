@@ -263,7 +263,7 @@ project(":plugin") {
             pluginList += listOf(
                 copyrightPlugin,
                 javaPlugin,
-                nativeDebugPlugin
+//                nativeDebugPlugin
             )
         }
         plugins.set(pluginList)
@@ -447,12 +447,12 @@ project(":clion") {
 
 project(":debugger") {
     intellij {
-        if (baseIDE == "idea") {
-            plugins.set(listOf(nativeDebugPlugin))
-        } else {
+//        if (baseIDE == "idea") {
+//            plugins.set(listOf(nativeDebugPlugin))
+//        } else {
             version.set(clionVersion)
             plugins.set(clionPlugins)
-        }
+//        }
     }
     dependencies {
         implementation(project(":"))
